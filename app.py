@@ -4,7 +4,7 @@ import folium
 from streamlit_folium import st_folium
 from folium.plugins import TimestampedGeoJson
 
-# --- 1. CONFIG & SETUP ---
+
 st.set_page_config(layout="wide", page_title="VahidOnline Data Analysis")
 
 def add_legend(m):
