@@ -10,19 +10,20 @@ st.set_page_config(layout="wide", page_title="VahidOnline Data Analysis")
 def add_legend(m):
     legend_html = '''
     <div style="position: fixed; 
-                bottom: 50px; left: 50px; width: 150px; height: 140px; 
-                background-color: white; border:2px solid grey; z-index:9999; font-size:14px;
-                padding: 10px;">
-        &nbsp;<b>Legend</b><br>
-        &nbsp;<i class="fa fa-circle fa-1x" style="color:green"></i>&nbsp; No Chant<br>
-        &nbsp;<i class="fa fa-circle fa-1x" style="color:blue"></i>&nbsp; 1 Economy<br>
-        &nbsp;<i class="fa fa-circle fa-1x" style="color:red"></i>&nbsp; 2 Anti-regime<br>
-        &nbsp;<i class="fa fa-circle fa-1x" style="color:magenta"></i>&nbsp; 3 Promonarchy<br>
-        &nbsp;<i class="fa fa-circle fa-1x" style="color:orange"></i>&nbsp; Mixed Cases
+                bottom: 80px; right: 20px; width: 140px; height: auto; 
+                background-color: white; border:2px solid grey; z-index:9999; font-size:12px;
+                padding: 10px; border-radius: 5px; opacity: 0.8;">
+        <b>Legend</b><br>
+        <i class="fa fa-circle" style="color:green"></i>&nbsp; No Chant<br>
+        <i class="fa fa-circle" style="color:blue"></i>&nbsp; 1 Economy<br>
+        <i class="fa fa-circle" style="color:red"></i>&nbsp; 2 Anti-regime<br>
+        <i class="fa fa-circle" style="color:magenta"></i>&nbsp; 3 Promonarchy<br>
+        <i class="fa fa-circle" style="color:orange"></i>&nbsp; Mixed Cases
     </div>
     '''
     m.get_root().html.add_child(folium.Element(legend_html))
     return m
+
 
 @st.cache_data
 def load_and_clean_data(file_path):
