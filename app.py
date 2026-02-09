@@ -3,11 +3,12 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 from folium.plugins import TimestampedGeoJson
+import numpy as np
 
-
+# --- 1. CONFIG & SETUP ---
 st.set_page_config(layout="wide", page_title="VahidOnline Data Analysis")
 
-def add_legend(m):
+def add_legend_chants(m):
     legend_html = '''
     <div style="position: fixed; 
                 bottom: 80px; right: 20px; width: 140px; height: auto; 
@@ -17,13 +18,11 @@ def add_legend(m):
         <i class="fa fa-circle" style="color:green"></i>&nbsp; No Chant<br>
         <i class="fa fa-circle" style="color:blue"></i>&nbsp; 1 Economy<br>
         <i class="fa fa-circle" style="color:red"></i>&nbsp; 2 Anti-regime<br>
-        <i class="fa fa-circle" style="color:magenta"></i>&nbsp; 3 Promonarchy<br>
-        <i class="fa fa-circle" style="color:orange"></i>&nbsp; Mixed Cases
+        <i class="fa fa-circle" style="color:magenta"></i>&nbsp; 3 Pro-monarchy
     </div>
     '''
     m.get_root().html.add_child(folium.Element(legend_html))
     return m
-
 
 @st.cache_data
 def load_and_clean_data(file_path):
@@ -42,29 +41,61 @@ def load_and_clean_data(file_path):
 # --- 2. MAP GENERATION ---
 def create_map(df):
     # colors = ["green", "blue", "purple", "navy", "magenta", "yellow", "red", "tomato", "pink"]
-    colors = ["green", "blue", "red", "magenta", "orange"]
+    # Mapping of label string to specific color
+    color_map = {
+        '0': "green",   # No Chant
+        '1': "blue",    # Economy
+        '2': "red",     # Anti-regime
+        '3': "magenta", # Promonarchy
+        # '4': "orange"   # General mixed/Other
+    }
+    # colors = ["green", "blue", "red", "magenta", "orange"]
     # Center on the first point or Tehran
     start_loc = [df.iloc[0]['latitude'], df.iloc[0]['longitude']] if not df.empty else [35.6892, 51.3890]
     m = folium.Map(location=start_loc, zoom_start=6, tiles="cartodbpositron")
 
     features = []
     for _, row in df.iterrows():
+        # To avoid overlapping points
+
+        seed = int(str(row['id'])[-6:]) # Use last 6 digits of ID as a seed
+        np.random.seed(seed) 
+
+        # Apply a tiny offset (approx 5-15 meters)
+        offset = 0.015
+        lat_jitter = row['latitude'] + np.random.uniform(-1 * offset, offset)
+        lon_jitter = row['longitude'] + np.random.uniform(-1 * offset, offset)
+
+        # Reset seed to avoid affecting other parts of the app
+        np.random.seed(None)
+
+        # --- Enhanced Mixed Label Logic ---
         labels = str(row['Label'])
-        chant_labels = ['1','2','3']
-        violence_labels = ['4','5','6','7','8']
-        if any(char in labels for char in chant_labels):
-            if len(labels) == 1:
-                c_ind = int(labels)
-            else:
-                c_ind = 4
-        else:
-            c_ind = 0
+
+        # Default colors
+        fill_color = color_map['0']
+        edge_color = color_map['0']
+
+        # Check for Chants (1, 2, 3)
+        chants_found = [c for c in labels if c in ['1', '2', '3']]
+
+        if len(chants_found) == 1:
+            # Single Case: Same color for both
+            fill_color = color_map[chants_found[0]]
+            edge_color = color_map[chants_found[0]]
+        elif len(chants_found) >= 2:
+            # Mixed Case: Edge is first chant, Fill is second chant
+            edge_color = color_map[chants_found[0]]
+            fill_color = color_map[chants_found[1]]
+        elif '0' not in labels:
+            pass
 
         feature = {
             'type': 'Feature',
             'geometry': {
                 'type': 'Point',
-                'coordinates': [row['longitude'], row['latitude']],
+                # 'coordinates': [row['longitude'], row['latitude']],
+                'coordinates': [lon_jitter, lat_jitter],
             },
             'properties': {
                 'time': row['date_utc'].strftime('%Y-%m-%dT%H:%M:%S'),
@@ -72,11 +103,12 @@ def create_map(df):
                 'id': row['id'],# .name # Useful for clicking,
                 "icon": "circle",
                 "iconstyle": {
-                    "fillColor": colors[c_ind],
-                    "fillOpacity": 1.0,
+                    "fillColor": fill_color,
+                    "fillOpacity": 1,
+                    "color": edge_color,  # This defines the edge color
                     "stroke": "true",
                     "radius": 10,
-                    "weight": 1
+                    "weight": 4           # Thicker weight makes the edge color visible
                 },
             }
         }
@@ -91,7 +123,7 @@ def create_map(df):
     ).add_to(m)
 
     # Add the Legend
-    m = add_legend(m)
+    m = add_legend_chants(m)
 
     return m
 
@@ -169,4 +201,4 @@ try:
             st.write("Click a point on the map to see details.")
 
 except Exception as e:
-    st.error(f"Please ensure 'final_data.xlsx' exists. Error: {e}")
+    st.error(f"Please ensure 'geocoded_results.xlsx' exists. Error: {e}")
