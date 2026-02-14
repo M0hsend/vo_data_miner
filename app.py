@@ -4,46 +4,14 @@ import folium
 from streamlit_folium import st_folium
 from folium.plugins import TimestampedGeoJson
 import numpy as np
+import glob
 
-# --- 1. CONFIG & SETUP ---
+# --- CONFIG & SETUP ---
 st.set_page_config(layout="wide", page_title="VahidOnline Data Analysis")
 
-def add_legend_chants(m):
-    legend_html = '''
-    <div style="position: fixed; 
-                bottom: 80px; right: 20px; width: 140px; height: auto; 
-                background-color: white; border:2px solid grey; z-index:9999; font-size:12px;
-                padding: 10px; border-radius: 5px; opacity: 0.8;">
-        <b>Legend</b><br>
-        <i class="fa fa-circle" style="color:blue"></i>&nbsp; 1 Economy<br>
-        <i class="fa fa-circle" style="color:red"></i>&nbsp; 2 Anti-regime<br>
-        <i class="fa fa-circle" style="color:magenta"></i>&nbsp; 3 Pro-monarchy
-    </div>
-    '''
-    m.get_root().html.add_child(folium.Element(legend_html))
-    return m
-        # '4': "yellow",   
-        # '5': "orange",    
-        # '6': "orangered",
-        # '7': "red",
-        # '8': "black", 
+FEATURED_IDS = [68847, 68873, 68886, 68918, 68981, 68994, 69000, 69010, 69042, 69200, 69218, 69225, 69265, 69277, 69293, 69304, 69511, 69702, 69705]
+FEATURED_COLOR = "cyan"
 
-def add_legend_violence(m):
-    legend_html = '''
-    <div style="position: fixed; 
-                bottom: 80px; right: 20px; width: 160px; height: auto; 
-                background-color: white; border:2px solid grey; z-index:9999; font-size:12px;
-                padding: 10px; border-radius: 5px; opacity: 0.9;">
-        <b>Violence Legend</b><br>
-        <i class="fa fa-circle" style="color:yellow"></i>&nbsp; 4 Tear gas<br>
-        <i class="fa fa-circle" style="color:orange"></i>&nbsp; 5 Cold weapon<br>
-        <i class="fa fa-circle" style="color:orangered"></i>&nbsp; 6 Shotgun<br>
-        <i class="fa fa-circle" style="color:red"></i>&nbsp; 7 Assault weapon<br>
-        <i class="fa fa-circle" style="color:black"></i>&nbsp; 8 Protestor violence
-    </div>
-    '''
-    m.get_root().html.add_child(folium.Element(legend_html))
-    return m
 
 @st.cache_data
 def load_and_clean_data(file_path):
@@ -59,111 +27,60 @@ def load_and_clean_data(file_path):
     # df = df.dropna(subset=['latitude', 'longitude'])
     return df
 
-# def get_combination(label_val):
-#     label_str = str(label_val)
-#     # Extract only target characters that are present in the string
-#     found = [char for char in label_str if char in target_labels]
-#     # Sort them so '21' and '12' are treated the same, then join with '+'
-#     return "+".join(sorted(found)) if found else None
 
-# --- 2. MAP GENERATION ---
+
 def create_map(df):
-    # colors = ["green", "blue", "purple", "navy", "magenta", "yellow", "red", "tomato", "pink"]
-    # Mapping of label string to specific color
-    color_map = {
-        # '0': "green",   # No Chant
-        '1': "blue",    # Economy
-        '2': "red",     # Anti-regime
-        '3': "magenta", # Promonarchy
-    }
-    # colors = ["green", "blue", "red", "magenta", "orange"]
-    # Center on the first point or Tehran
-    start_loc = [df.iloc[0]['latitude'], df.iloc[0]['longitude']] if not df.empty else [35.6892, 51.3890]
+    # Center map
+    start_loc = [32.4279, 53.6880]
     m = folium.Map(location=start_loc, zoom_start=6, tiles="cartodbpositron")
-    counter = 0
-    features = []
+
+    color_map = {'1': "blue", '2': "red", '3': "magenta"}
+
     for _, row in df.iterrows():
-        # To avoid overlapping points
+        # ... keep your jitter logic here ...
+
 
         seed = int(str(row['id'])[-6:]) # Use last 6 digits of ID as a seed
         np.random.seed(seed) 
 
-        # Apply a tiny offset (approx 5-15 meters)
-        offset = 0.015
+        offset = 0.0015
         lat_jitter = row['latitude'] + np.random.uniform(-1 * offset, offset)
         lon_jitter = row['longitude'] + np.random.uniform(-1 * offset, offset)
 
-        # Reset seed to avoid affecting other parts of the app
-        np.random.seed(None)
+        # labels = str(row['Label'])
+        # chants_found = [c for c in labels if c in ['1', '2', '3']]
 
-        # --- Enhanced Mixed Label Logic ---
 
-        labels = str(row['Label'])
-        chant_labels = ['1','2','3']
-        is_chant = any(char in labels for char in chant_labels)
-        if not is_chant:
-            continue  # Skip this row entirely; it won't be drawn on the map
-        else:
-            counter +=1
-            # Check for Chants (1, 2, 3)
-            chants_found = [c for c in labels if c in ['1', '2', '3']]
 
-            if len(chants_found) == 1:
-                # Single Case: Same color for both
-                fill_color = color_map[chants_found[0]]
-                edge_color = color_map[chants_found[0]]
-            elif len(chants_found) >= 2:
-                # Mixed Case: Edge is first chant, Fill is second chant
-                edge_color = color_map[chants_found[0]]
-                fill_color = color_map[chants_found[1]]
-            elif '0' not in labels:
-                pass
+        is_featured = row['id'] in FEATURED_IDS
+        chants = [c for c in str(row['Label']) if c in ['1', '2', '3']]
+        if not chants and not is_featured: continue
 
-            feature = {
-                'type': 'Feature',
-                'geometry': {
-                    'type': 'Point',
-                    # 'coordinates': [row['longitude'], row['latitude']],
-                    'coordinates': [lon_jitter, lat_jitter],
-                },
-                'properties': {
-                    'time': row['date_utc'].strftime('%Y-%m-%dT%H:%M:%S'),
-                    'popup': f"<b>{row['id']}</b><br>{row['address']}",
-                    'id': row['id'],# .name # Useful for clicking,
-                    "icon": "circle",
-                    "iconstyle": {
-                        "fillColor": fill_color,
-                        "fillOpacity": 1,
-                        "color": edge_color,  # This defines the edge color
-                        "stroke": "true",
-                        "radius": 10,
-                        "weight": 4           # Thicker weight makes the edge color visible
-                    },
-                }
-            }
-            features.append(feature)
-    print(f"Total number mapped: {counter}")
+        fill = FEATURED_COLOR if is_featured else color_map.get(chants[0], "gray")
 
-    TimestampedGeoJson(
-        {'type': 'FeatureCollection', 'features': features},
-        period='P1D',
-        add_last_point=True,
-        auto_play=False,
-        date_options='YYYY-MM-DD',
-    ).add_to(m)
-
-    # Add the Legend
-    # m = add_legend_chants(m)
+        # By using a unique 'name' or embedding the ID in the popup, 
+        # st_folium can track it directly.
+        folium.CircleMarker(
+            location=[lat_jitter, lon_jitter],
+            radius=12 if is_featured else 8,
+            color="white" if is_featured else fill,
+            fill=True,
+            fill_color=fill,
+            fill_opacity=0.8,
+            popup=f"{row['id']}", # This will appear in last_object_clicked_popup
+            tooltip=f"ID: {row['id']}" # This will appear in last_object_clicked_tooltip
+        ).add_to(m)
 
     return m
 
-def create_violence_timeline_map(df):
-    # 1. Filter for labels 4 through 8
-    violence_pattern = '[45678]'
-    v_df = data[data['Label'].astype(str).str.contains(violence_pattern)].copy()
 
-    # 2. Setup map centered on Iran
+
+
+
+def create_violence_timeline_map(filtered_df):
+    # Setup map centered on Iran
     m = folium.Map(location=[32.4279, 53.6880], zoom_start=5, tiles="cartodbpositron")
+
     color_map = {
         '4': "yellow",   
         '5': "orange",    
@@ -171,78 +88,46 @@ def create_violence_timeline_map(df):
         '7': "red",
         '8': "black", 
     }
-    features = []
-    for _, row in v_df.iterrows():
-        # Use deterministic jitter for the second map as well
+
+    for _, row in filtered_df.iterrows():
+        # Deterministic jitter using ID
         seed = int(str(row['id'])[-6:])
         np.random.seed(seed)
         offset = 0.015
         lat_jitter = row['latitude'] + np.random.uniform(-1 * offset, offset)
         lon_jitter = row['longitude'] + np.random.uniform(-1 * offset, offset)
-        np.random.seed(None)
 
         labels = str(row['Label'])
         viol_labels = ['4','5','6', '7', '8']
-        is_viol = any(char in labels for char in viol_labels)
-        if not is_viol:
-            continue  # Skip this row entirely; it won't be drawn on the map
-        else:
-            # counter +=1
-            # Check for Chants (1, 2, 3)
-            viol_found = [c for c in labels if c in viol_labels]
+        viol_found = [c for c in labels if c in viol_labels]
 
-            if len(viol_found) == 1:
-                # Single Case: Same color for both
-                fill_color = color_map[viol_found[0]]
-                edge_color = color_map[viol_found[0]]
-            elif len(viol_found) >= 2:
-                # Mixed Case: Edge is first chant, Fill is second chant
-                edge_color = color_map[viol_found[0]]
-                fill_color = color_map[viol_found[1]]
-            elif '0' not in labels:
-                pass
+        if not viol_found:
+            continue
 
-        feature = {
-            'type': 'Feature',
-            'geometry': {
-                'type': 'Point',
-                'coordinates': [lon_jitter, lat_jitter],
-            },
-            'properties': {
-                'time': row['date_utc'].strftime('%Y-%m-%dT%H:%M:%S'),
-                'popup': f"<b>Violence/Other ID: {row['id']}</b><br>Label: {row['Label']}",
-                "icon": "circle",
-                "iconstyle": {
-                        "fillColor": fill_color,
-                        "fillOpacity": 1,
-                        "color": edge_color,  # This defines the edge color
-                        "stroke": "true",
-                        "radius": 10,
-                        "weight": 4           # Thicker weight makes the edge color visible
-                    },
-            }
-        }
-        features.append(feature)
+        # Color logic: edge is first label found, fill is second (if applicable)
+        edge_color = color_map[viol_found[0]]
+        fill_color = color_map[viol_found[1]] if len(viol_found) >= 2 else edge_color
 
-    # 3. Add the Timeline Slider to the second map
-    TimestampedGeoJson(
-        {'type': 'FeatureCollection', 'features': features},
-        period='P1D',
-        add_last_point=True,
-        auto_play=False,
-        date_options='YYYY-MM-DD',
-    ).add_to(m)
-
-    # m = add_legend_violence(m)
+        # Direct CircleMarker for stable click-detection
+        folium.CircleMarker(
+            location=[lat_jitter, lon_jitter],
+            radius=10,
+            color=edge_color,
+            weight=4,
+            fill=True,
+            fill_color=fill_color,
+            fill_opacity=1,
+            # IDs for st_folium retrieval
+            popup=f"Violence ID: {row['id']}",
+            tooltip=f"ID: {row['id']}"
+        ).add_to(m)
 
     return m
 
-# --- 3. STREAMLIT UI ---
+# --- STREAMLIT UI ---
 st.title("Mapping the timeline of the Protests in Iran")
 
-# Load data (Replace with your actual filename)
 try:
-    # data = load_and_clean_data("geocoded_results.xlsx")
     data = load_and_clean_data("final_data.xlsx")
 
         # --- Intro SECTION (Full Width) ---
@@ -260,8 +145,6 @@ try:
     across various regions of Iran.
     """)
 
-
-        # --- Overall look at histogram ---
     st.subheader("Data flow from VafidOnline leading to 9th Jan 2026")
     col_a, col_b = st.columns(2)
 
@@ -288,9 +171,29 @@ try:
     col1, col2 = st.columns([1, 2])
 
     with col2:
-        map_obj = create_map(data)
-        # We capture the map output to detect clicks
-        map_data = st_folium(map_obj, width=800, height=600)
+
+        # UI Section
+        min_date = data['date_utc'].min().date()
+        max_date = data['date_utc'].max().date()
+
+        # The slider effectively acts as your timeline
+        selected_date = st.slider("Timeline Control", min_date, max_date, min_date)
+
+        # Filter dataframe
+        filtered_data = data[data['date_utc'].dt.date <= selected_date]
+
+        # Display Map
+        map_obj = create_map(filtered_data)
+        map_data = st_folium(map_obj, key="main_map")
+
+
+
+
+        # map_obj = create_map(data)
+        # # We capture the map output to detect clicks
+        # map_data = st_folium(map_obj, width=800, height=600, key="main_map")
+        # print(map_data)
+        # print("HERE:", map_data.get("last_object_clicked"))
 
     with col1:
         st.subheader("Slogans chanted in protests mapped over time")
@@ -305,25 +208,32 @@ try:
         </div>
         """, unsafe_allow_html=True)
 
-        #         <i class="fa fa-circle" style="color:blue"></i>&nbsp; 1 Economy<br>
-        # <i class="fa fa-circle" style="color:red"></i>&nbsp; 2 Anti-regime<br>
-        # <i class="fa fa-circle" style="color:magenta"></i>&nbsp; 3 Pro-monarchy
-
         # Logic to show video if a point is clicked
-        if map_data.get("last_object_clicked"):
-            # Folium returns [lat, lon], we find matching row
-            click_lat = map_data["last_object_clicked"]["lat"]
-            selected = data[data['latitude'] == click_lat].iloc[0]
+# Logic to show video if a point is clicked
+        videos_paths = glob.glob('static/*.MP4')
+        print(videos_paths)
+        if map_data and map_data.get("last_object_clicked_tooltip"):
+            # Extract the ID directly from the tooltip string (e.g., "ID: 68781")
+            tooltip_text = map_data["last_object_clicked_tooltip"]
+            clicked_id = tooltip_text.replace("ID: ", "").strip()
 
-            st.info(f"Selected: {selected['id']}")
-            st.write(f"**Address:** {selected['address']}")
+            st.write(f"### Selected ID: {clicked_id}")
 
-            if 'video_url' in selected and pd.notna(selected['video_url']):
-                st.video(selected['video_url'])
-            else:
-                st.warning("No video associated with this point.")
-        else:
-            st.write("Click a point on the map to see details.")
+            # Trigger video
+            if int(clicked_id) in FEATURED_IDS:
+                selected_row = data[data['id'] == int(clicked_id)]
+                row_data = selected_row.iloc[0]
+                if 'address' in row_data:
+                    st.write(f"**Location:** {row_data['address']}")
+                if 'Description' in row_data: 
+                    st.info(f"**Description:** {row_data['Description']}")
+
+                video_match = [p for p in videos_paths if clicked_id in p]
+                print("PATH: ", video_match)
+                if video_match:
+                    st.video(video_match[0])
+
+
 
     st.divider() # Adds a visual horizontal line
     st.header("Slogans in numbers")
@@ -348,26 +258,32 @@ try:
 
 
 
+
+
+
+    # --- VIOLENCE MAP SECTION ---
     st.divider()
-    st.header("Timeline of Violence & Conflict (Labels 4-8)")
+    st.header("Timeline of Violence & Conflict")
 
-    col1, col2 = st.columns([1, 2])
+    # Filter for relevant violence labels first
+    violence_pattern = '[45678]'
+    violence_data = data[data['Label'].astype(str).str.contains(violence_pattern)].copy()
 
-    with col2:
-        # Display the map
-        v_map_obj = create_violence_timeline_map(data)
+    col1_v, col2_v = st.columns([1, 2])
 
-        # 'key="violence_timeline"' prevents conflicts with the first map
-        st_folium(v_map_obj, width=800, height=600, key="violence_timeline")
+    with col2_v:
+        # Use a separate slider or the same one as above
+        v_selected_date = st.slider("Violence Timeline Control", min_date, max_date, min_date, key="v_slider")
 
-        # with st.sidebar:
-        #     st.write("### Map Legends")
-        #     with st.expander("Violence Map (Labels 4-8)"):
-        #         st.markdown("🟡 Tear gas<br>🟠 Cold weapon<br>🔴 Shotgun/Assault<br>⚫ Protestor violence", unsafe_allow_html=True)
+        # Filter by date
+        v_filtered = violence_data[violence_data['date_utc'].dt.date <= v_selected_date]
 
-    with col1:
-        st.subheader("Violence mapped over time")
-        # Logic to show video if a point is clicked
+        # Render map
+        v_map_obj = create_violence_timeline_map(v_filtered)
+        v_map_data = st_folium(v_map_obj, width=800, height=600, key="violence_timeline")
+
+    with col1_v:
+        st.subheader("Violence Details")
 
         st.subheader("Map Legend")
         # Using HTML to create colored circles
@@ -377,34 +293,32 @@ try:
             <span style="color:orange; font-size:20px;">●</span> <b>Label 5:</b> Cold weapon<br>
             <span style="color:orangered; font-size:20px;">●</span> <b>Labe 6:</b> Shotgun<br>
             <span style="color:red; font-size:20px;">●</span> <b>Label 7:</b> Assault weapon<br>
-            <span style="color:black; font-size:20px;">●</span> <b>Label 8:</b> Protestor violence<br>
-            <span style="border: 2px solid red; border-radius: 50%; width: 12px; height: 12px; display: inline-block; background-color: blue; margin-right: 5px;"></span> <b>Two-tone:</b> Mixed Slogans
+            <span style="color:black; font-size:20px;">●</span> <b>Label 8:</b> Protestor defensive violence
         </div>
         """, unsafe_allow_html=True)
 
+        # Logic to show video/text for the Violence Map
+        if v_map_data and v_map_data.get("last_object_clicked_tooltip"):
+            v_tooltip = v_map_data["last_object_clicked_tooltip"]
+            v_clicked_id = v_tooltip.replace("ID: ", "").strip()
 
+            # Display ID and matched data
+            st.write(f"### Selected Violence ID: {v_clicked_id}")
+            v_row = data[data['id'] == int(v_clicked_id)].iloc[0]
 
-        if map_data.get("last_object_clicked"):
-            # Folium returns [lat, lon], we find matching row
-            click_lat = map_data["last_object_clicked"]["lat"]
-            selected = data[data['latitude'] == click_lat].iloc[0]
+            st.write(f"**Location:** {v_row['address']}")
+            # if int(v_clicked_id) in VIOL_FEATURED_IDS:
+            #     selected_row = data[data['id'] == int(clicked_id)]
+            #     row_data = selected_row.iloc[0]
+            #     if 'address' in row_data:
+            #         st.write(f"**Location:** {row_data['address']}")
+            #     if 'Description' in row_data: 
+            #         st.info(f"**Description:** {row_data['Description']}")
 
-            st.info(f"Selected: {selected['id']}")
-            st.write(f"**Address:** {selected['address']}")
-
-            if 'video_url' in selected and pd.notna(selected['video_url']):
-                st.video(selected['video_url'])
-            else:
-                st.warning("No video associated with this point.")
-        else:
-            st.write("Click a point on the map to see details.")
-
-
-
-
-
-
-
+            #     video_match = [p for p in videos_paths if clicked_id in p]
+            #     print("PATH: ", video_match)
+            #     if video_match:
+            #         st.video(video_match[0])
 
 
 except Exception as e:
