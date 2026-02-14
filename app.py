@@ -210,7 +210,7 @@ try:
 
         # Logic to show video if a point is clicked
 # Logic to show video if a point is clicked
-        videos_paths = glob.glob('static/*.MP4')
+        videos_paths = glob.glob('static/*.mp4')
         print(videos_paths)
         if map_data and map_data.get("last_object_clicked_tooltip"):
             # Extract the ID directly from the tooltip string (e.g., "ID: 68781")
