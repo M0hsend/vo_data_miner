@@ -6,6 +6,8 @@ from folium.plugins import TimestampedGeoJson
 import numpy as np
 import glob, os
 from folium.plugins import MarkerCluster
+import altair as alt
+import datetime
 
 st.markdown("""
     <style>
@@ -151,7 +153,7 @@ def create_violence_timeline_map(filtered_df):
         '4': "yellow",   
         '5': "orange",    
         '6': "orangered",
-        '7': "red",
+        '7': "purple",
         '8': "black", 
     }
 
@@ -225,7 +227,7 @@ def create_casualty_map(df):
             weight=1,
             fill=True,
             fill_opacity=0.6,
-            tooltip=str(row.message_id) 
+            tooltip="ID: " + str(row.message_id) 
         ).add_to(marker_cluster)
     return m
 
@@ -241,28 +243,73 @@ try:
     st.divider() # Adds a visual horizontal line
     st.header("Analysis Overview")
     st.write("""
-    In late December 2025 - early January 2026 Iran witnessed a [massive uprising](https://en.wikipedia.org/wiki/2025%E2%80%932026_Iranian_protests) across 
-    its nation. Ignited initially by high inflation rates, malfunctioning economy and plummeting value of the currency, then morphed into a widespread protest 
-    against the regime's existence. This was suppressed by unprecedented brutal force by the government, resulting in tens of thousands of casualties, 
-    mostly inflicted during the two days at peak of these protests (8-9 Jan. 2026).
-    Since there is no independent journalism allowed in Iran, the main source of news is the stream of
-    videos captured by the protestors or by-standers, shared with the outside world. One trusted platform that widely shares these videos is 
-    [VahidOnline's](https://en.wikipedia.org/wiki/Vahid_Online) Telegram channel. 
-    By observing the map on the right, you can see the progression of events 
-    across various regions of Iran.
-    """)
+Between late December 2025 and early January 2026, Iran experienced a [massive nationwide uprising](https://en.wikipedia.org/wiki/2025%E2%80%932026_Iranian_protests). Initially sparked by soaring inflation, 
+a malfunctioning economy, and a plummeting currency value, the movement quickly evolved into a widespread protest against the existence of the regime itself. 
+This uprising was met with unprecedented brutal force by the government, resulting in tens of thousands of casualties—most of which occurred during the two-day
+peak of the protests on January 8–9, 2026.
+Because independent journalism is prohibited in Iran, news is primarily disseminated through videos captured by protesters and bystanders and shared globally. 
+One of the most trusted platforms for these recordings is [VahidOnline’s](https://en.wikipedia.org/wiki/Vahid_Online) Telegram channel.
 
-    st.subheader("Data flow from VahidOnline leading to 9th Jan 2026")
+To develop this analysis platform, we analyzed 820 videos from VahidOnline posted between December 14, 2025, and January 13, 2026. 
+This period covers the start of the uprising through the government-imposed nationwide internet blackout on January 8th, which utilized military-grade jamming
+technology (see [here](https://www.ft.com/content/5d848323-84a9-4512-abd2-dd09e0a786a3) - paid access). Our objective was to create a temporal map of the uprising, 
+tracking both the evolution of protest slogans and the intensity of state violence.
+
+Each video was carefully reviewed and labeled based on:
+
+- Chanted Slogans: Categorized to show the shift in protest focus (see the first map).
+
+- Levels of Violence: Documenting the force used by the regime to suppress demonstrators.
+
+- Protester Response: Identifying instances of defensive violence or civil unrest (see the second map).
+
+Locations were determined using the metadata and captions provided with each video. 
+Of the initial corpus, 769 videos were successfully labeled and geolocated. 
+The raw dataset is available for review via [this link](https://drive.google.com/drive/folders/1A8jxa_Pz1ITmyfCQJMkRETotUvXzsRZS?usp=sharing). 
+Each video ID - visible by clicking on the points - can then be used to find the corresponding video in the data stash shared above.
+
+
+Finally, we have integrated a map of nationwide casualties using data compiled by the memorial Telegram channel, [RememberTheirNames](https://t.me/RememberTheirNames).
+
+
+If you would like to provide any feedback please contact us at [this](iran1404data@gmail.com) address.
+""")
+
+    st.subheader("Number of videos posted on VahidOnline leading to 9th Jan 2026")
     col_a, col_b = st.columns(2)
 
     with col_a:
+        # st.write("Histogram of posted videos on VahidOnline")
+        # hist_data = data.copy()
+        # hist_data['date_utc'] = pd.to_datetime(hist_data['date_utc'], utc=True, errors='coerce')
+        # hist_data['just_date'] = hist_data['date_utc'].dt.date
+        # date_counts = hist_data['just_date'].value_counts().sort_index()
+        # st.bar_chart(date_counts)
+        # st.caption("<p style='text-align: center;'>Date of Video</p>", unsafe_allow_html=True)
+
         st.write("Histogram of posted videos on VahidOnline")
         hist_data = data.copy()
         hist_data['date_utc'] = pd.to_datetime(hist_data['date_utc'], utc=True, errors='coerce')
         hist_data['just_date'] = hist_data['date_utc'].dt.date
-        date_counts = hist_data['just_date'].value_counts().sort_index()
-        st.bar_chart(date_counts)
-        st.caption("<p style='text-align: center;'>Date of Video</p>", unsafe_allow_html=True)
+
+        # Prepare data for Altair
+        date_counts = hist_data['just_date'].value_counts().reset_index()
+        date_counts.columns = ['Date', 'Count']
+        date_counts = date_counts.sort_values('Date')
+
+        # Create the chart with fixed lateral axes
+        chart = alt.Chart(date_counts).mark_bar(color='steelblue').encode(
+            x=alt.X('Date:T', 
+                    title='Date of Video',
+                    # This fixes the axis range to the period of the uprising
+                    scale=alt.Scale(domain=['2025-12-20', '2026-01-15']) 
+            ),
+            y=alt.Y('Count:Q', title='Number of Videos'),
+            tooltip=['Date', 'Count']
+        ).interactive(bind_y=False) # This allows the zoom/pan within the fixed range
+
+        st.altair_chart(chart, use_container_width=True)
+        st.caption("<p style='text-align: center;'>Date of Video (Scroll to zoom, drag to pan)</p>", unsafe_allow_html=True)
 
     with col_b:
         st.write("""
@@ -284,7 +331,8 @@ try:
         max_date = data['date_utc'].max().date()
 
         # The slider effectively acts as your timeline
-        selected_date = st.slider("Slide to Change the Date", min_date, max_date, min_date)
+        start_date = datetime.date(2025, 12, 25)
+        selected_date = st.slider("Slide to Change the Date", min_date, max_date, start_date)
 
         # Filter dataframe
         filtered_data = data[data['date_utc'].dt.date <= selected_date]
@@ -322,6 +370,7 @@ try:
                 row_data = selected_row.iloc[0]
                 if 'address' in row_data:
                     st.write(f"**Location:** {row_data['address']}")
+                    st.write(f"**Date:** {row_data['date_utc'].date()}")
                 if 'Description' in row_data: 
                     st.info(f"**Description:** {row_data['Description']}")
 
@@ -366,7 +415,8 @@ try:
 
     with col2_v:
         # Use a separate slider or the same one as above
-        v_selected_date = st.slider("Slide to Change the Date", min_date, max_date, min_date, key="v_slider")
+        start_date = datetime.date(2025, 12, 25)
+        v_selected_date = st.slider("Slide to Change the Date", min_date, max_date, start_date, key="v_slider")
 
         # Filter by date
         v_filtered = violence_data[violence_data['date_utc'].dt.date <= v_selected_date]
@@ -384,9 +434,9 @@ try:
         <div style="line-height: 2;">
             <span style="color:yellow; font-size:20px;">●</span> <b>Label 4:</b> Altercation - Tear gas<br>
             <span style="color:orange; font-size:20px;">●</span> <b>Label 5:</b> Cold weapon<br>
-            <span style="color:orangered; font-size:20px;">●</span> <b>Labe 6:</b> Shotgun<br>
-            <span style="color:red; font-size:20px;">●</span> <b>Label 7:</b> Assault weapon<br>
-            <span style="color:black; font-size:20px;">●</span> <b>Label 8:</b> Protestor defensive violence
+            <span style="color:orangered; font-size:20px;">●</span> <b>Label 6:</b> Shotgun<br>
+            <span style="color:purple; font-size:20px;">●</span> <b>Label 7:</b> Assault weapon<br>
+            <span style="color:black; font-size:20px;">●</span> <b>Label 8:</b> Protester defensive violence
         </div>
         """, unsafe_allow_html=True)
 
@@ -417,7 +467,7 @@ try:
     st.divider()
     st.header("Casualties Mapped")
     st.write("""
-    The number of killed protestors is currently unkown with reported casualties ranging from around 6000 to more than 30000 
+    The number of killed Protesters is currently unkown with reported casualties ranging from around 6000 to more than 30000 
     [please see sources [here](https://en.wikipedia.org/wiki/2026_Iran_massacres#cite_note-4)]. Here we have used the information posted on
     the Telegram channel [RememberTheirNames](https://t.me/RememberTheirNames) to map the casualties. This map will be updated over time. 
         """)
@@ -447,7 +497,7 @@ try:
         clicked_val = c_map_data.get("last_object_clicked_tooltip")
 
         if clicked_val:
-            clicked_id = str(clicked_val).strip()
+            clicked_id = str(clicked_val[3:]).strip()
             # Filter once using the index for speed
             selected_rows = memo_data[memo_data['message_id'] == int(clicked_id)]
 
