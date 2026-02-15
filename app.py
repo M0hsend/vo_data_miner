@@ -4,12 +4,32 @@ import folium
 from streamlit_folium import st_folium
 from folium.plugins import TimestampedGeoJson
 import numpy as np
-import glob
+import glob, os
+from folium.plugins import MarkerCluster
+
+st.markdown("""
+    <style>
+    /* Highlight the slider track and handle */
+    .stSlider [data-baseweb="slider"] {
+        padding-top: 15px;
+        padding-bottom: 15px;
+    }
+    /* Add a background color to the slider area to make it a distinct 'section' */
+    div[data-testid="stExpander"], .stSlider {
+        background-color: #f0f2f6;
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 5px solid #00d4ff; /* Cyan accent matching your FEATURED_COLOR */
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 
 # --- CONFIG & SETUP ---
 st.set_page_config(layout="wide", page_title="VahidOnline Data Analysis")
 
-FEATURED_IDS = [68847, 68873, 68886, 68918, 68981, 68994, 69000, 69010, 69042, 69200, 69218, 69225, 69265, 69277, 69293, 69304, 69511, 69702, 69705]
+FEATURED_IDS = [68847, 68873, 68886, 68918, 68981, 68994, 69000, 69010, 69042, 69200, 69218, 69225, 69265, 69277, 69293, 69304, 69511, 
+                69518, 69540, 69641, 69688, 69702, 69705]
 FEATURED_COLOR = "cyan"
 
 
@@ -29,15 +49,48 @@ def load_and_clean_data(file_path):
 
 
 
+@st.cache_data
+def load_memorial_data(file_path):
+    df = pd.read_excel(file_path)
+    # Perform all cleaning here once
+    df = df.dropna(subset=['latitude', 'longitude']).copy()
+    return df
+
+# # @st.cache_resource
+# def get_cached_casualty_map(_df):
+#     # The underscore prefix tells Streamlit not to hash the entire dataframe
+#     # This significantly speeds up the caching check
+#     return create_casualty_map(_df)
+
+
+
 def create_map(df):
+    # 1. Define the boundary coordinates for Iran
+    # Format: [[South, West], [North, East]]
+    iran_bounds = [[24.0, 43.0], [40.0, 64.0]] 
+
+    # 2. Add the constraints to the Map object
+    m = folium.Map(
+        location=[32.4279, 53.6880], 
+        zoom_start=6, 
+        tiles="cartodbpositron",
+        max_bounds=True,           # Enables boundary enforcement
+        min_lat=iran_bounds[0][0], # Southern boundary
+        max_lat=iran_bounds[1][0], # Northern boundary
+        min_lon=iran_bounds[0][1], # Western boundary
+        max_lon=iran_bounds[1][1], # Eastern boundary
+        min_zoom=5,                # Prevents zooming out to see the whole world
+        max_zoom=14                # Optional: prevents excessive zooming in
+    )
+
+
+    df = df.dropna(subset=['latitude', 'longitude'])
     # Center map
     start_loc = [32.4279, 53.6880]
-    m = folium.Map(location=start_loc, zoom_start=6, tiles="cartodbpositron")
 
     color_map = {'1': "blue", '2': "red", '3': "magenta"}
 
     for _, row in df.iterrows():
-        # ... keep your jitter logic here ...
 
 
         seed = int(str(row['id'])[-6:]) # Use last 6 digits of ID as a seed
@@ -46,11 +99,6 @@ def create_map(df):
         offset = 0.0015
         lat_jitter = row['latitude'] + np.random.uniform(-1 * offset, offset)
         lon_jitter = row['longitude'] + np.random.uniform(-1 * offset, offset)
-
-        # labels = str(row['Label'])
-        # chants_found = [c for c in labels if c in ['1', '2', '3']]
-
-
 
         is_featured = row['id'] in FEATURED_IDS
         chants = [c for c in str(row['Label']) if c in ['1', '2', '3']]
@@ -78,8 +126,26 @@ def create_map(df):
 
 
 def create_violence_timeline_map(filtered_df):
+    filtered_df = filtered_df.dropna(subset=['latitude', 'longitude'])
     # Setup map centered on Iran
-    m = folium.Map(location=[32.4279, 53.6880], zoom_start=5, tiles="cartodbpositron")
+
+        # 1. Define the boundary coordinates for Iran
+    # Format: [[South, West], [North, East]]
+    iran_bounds = [[24.0, 43.0], [40.0, 64.0]] 
+
+    # 2. Add the constraints to the Map object
+    m = folium.Map(
+        location=[32.4279, 53.6880], 
+        zoom_start=6, 
+        tiles="cartodbpositron",
+        max_bounds=True,           # Enables boundary enforcement
+        min_lat=iran_bounds[0][0], # Southern boundary
+        max_lat=iran_bounds[1][0], # Northern boundary
+        min_lon=iran_bounds[0][1], # Western boundary
+        max_lon=iran_bounds[1][1], # Eastern boundary
+        min_zoom=5,                # Prevents zooming out to see the whole world
+        max_zoom=14                # Optional: prevents excessive zooming in
+    )
 
     color_map = {
         '4': "yellow",   
@@ -124,28 +190,69 @@ def create_violence_timeline_map(filtered_df):
 
     return m
 
+def create_casualty_map(df):
+    # Use a fixed starting location to reduce computation
+    # 1. Define the boundary coordinates for Iran
+    # Format: [[South, West], [North, East]]
+    iran_bounds = [[24.0, 43.0], [40.0, 64.0]] 
+
+    # 2. Add the constraints to the Map object
+    m = folium.Map(
+        location=[32.4279, 53.6880], 
+        zoom_start=6, 
+        tiles="cartodbpositron",
+        max_bounds=True,           # Enables boundary enforcement
+        min_lat=iran_bounds[0][0], # Southern boundary
+        max_lat=iran_bounds[1][0], # Northern boundary
+        min_lon=iran_bounds[0][1], # Western boundary
+        max_lon=iran_bounds[1][1], # Eastern boundary
+        min_zoom=5,                # Prevents zooming out to see the whole world
+        max_zoom=14                # Optional: prevents excessive zooming in
+    )
+
+    # Speed up MarkerCluster
+    marker_cluster = MarkerCluster(
+        disableClusteringAtZoom=10,
+        spiderfyOnMaxZoom=True
+    ).add_to(m)
+
+    # Use a vectorized approach or a faster loop
+    for row in df.itertuples():
+        folium.CircleMarker(
+            location=[row.latitude, row.longitude],
+            radius=5,
+            color="black",
+            weight=1,
+            fill=True,
+            fill_opacity=0.6,
+            tooltip=str(row.message_id) 
+        ).add_to(marker_cluster)
+    return m
+
 # --- STREAMLIT UI ---
 st.title("Mapping the timeline of the Protests in Iran")
 
 try:
     data = load_and_clean_data("final_data.xlsx")
+    # memo_data = pd.read_excel("memorial_final_data.xlsx")
+    # memo_data = memo_data.dropna(subset=['address']).copy()
 
         # --- Intro SECTION (Full Width) ---
     st.divider() # Adds a visual horizontal line
     st.header("Analysis Overview")
     st.write("""
     In late December 2025 - early January 2026 Iran witnessed a [massive uprising](https://en.wikipedia.org/wiki/2025%E2%80%932026_Iranian_protests) across 
-    its nation. Ignited initially by high inflation rates, malfunctioning economy and plummeting value of the currency, morphed into a widespread protest 
-    against the regime's existence. This was suppressed by brutal force by the government, resulting in tens of thousands of casualties, mostly inflicted 
-    during the two days at peak of these protests (8-9 Jan. 2026).
+    its nation. Ignited initially by high inflation rates, malfunctioning economy and plummeting value of the currency, then morphed into a widespread protest 
+    against the regime's existence. This was suppressed by unprecedented brutal force by the government, resulting in tens of thousands of casualties, 
+    mostly inflicted during the two days at peak of these protests (8-9 Jan. 2026).
     Since there is no independent journalism allowed in Iran, the main source of news is the stream of
-    videos captured by the protestors or by-standers, shared with outside world. One trusted platform that widely shares these videos is 
+    videos captured by the protestors or by-standers, shared with the outside world. One trusted platform that widely shares these videos is 
     [VahidOnline's](https://en.wikipedia.org/wiki/Vahid_Online) Telegram channel. 
     By observing the map on the right, you can see the progression of events 
     across various regions of Iran.
     """)
 
-    st.subheader("Data flow from VafidOnline leading to 9th Jan 2026")
+    st.subheader("Data flow from VahidOnline leading to 9th Jan 2026")
     col_a, col_b = st.columns(2)
 
     with col_a:
@@ -166,7 +273,7 @@ try:
 
     # You can even use a container to group things
     with st.container():
-        st.info("💡 Tip: Use the timeline slider at the bottom of the map to filter by date.")
+        st.info("💡 Tip: Use the timeline slider at the top of the map to filter by date.")
 
     col1, col2 = st.columns([1, 2])
 
@@ -177,7 +284,7 @@ try:
         max_date = data['date_utc'].max().date()
 
         # The slider effectively acts as your timeline
-        selected_date = st.slider("Timeline Control", min_date, max_date, min_date)
+        selected_date = st.slider("Slide to Change the Date", min_date, max_date, min_date)
 
         # Filter dataframe
         filtered_data = data[data['date_utc'].dt.date <= selected_date]
@@ -185,15 +292,6 @@ try:
         # Display Map
         map_obj = create_map(filtered_data)
         map_data = st_folium(map_obj, key="main_map")
-
-
-
-
-        # map_obj = create_map(data)
-        # # We capture the map output to detect clicks
-        # map_data = st_folium(map_obj, width=800, height=600, key="main_map")
-        # print(map_data)
-        # print("HERE:", map_data.get("last_object_clicked"))
 
     with col1:
         st.subheader("Slogans chanted in protests mapped over time")
@@ -204,12 +302,11 @@ try:
             <span style="color:blue; font-size:20px;">●</span> <b>Label 1:</b> Economy<br>
             <span style="color:red; font-size:20px;">●</span> <b>Label 2:</b> Anti-regime<br>
             <span style="color:magenta; font-size:20px;">●</span> <b>Label 3:</b> Pro-monarchy<br>
-            <span style="border: 2px solid red; border-radius: 50%; width: 12px; height: 12px; display: inline-block; background-color: blue; margin-right: 5px;"></span> <b>Two-tone:</b> Mixed Slogans
+            <span style="border: 2px solid red; border-radius: 50%; width: 12px; height: 12px; display: inline-block; background-color: blue; margin-right: 5px;"></span> <b>Two-tone:</b> Mixed Slogans<br>
+            <span style="color:cyan; font-size:20px;">●</span> <b>Featured video (Click for the video to appear)</b> 
         </div>
         """, unsafe_allow_html=True)
 
-        # Logic to show video if a point is clicked
-# Logic to show video if a point is clicked
         videos_paths = glob.glob('static/*.mp4')
         print(videos_paths)
         if map_data and map_data.get("last_object_clicked_tooltip"):
@@ -257,10 +354,6 @@ try:
 
 
 
-
-
-
-
     # --- VIOLENCE MAP SECTION ---
     st.divider()
     st.header("Timeline of Violence & Conflict")
@@ -273,7 +366,7 @@ try:
 
     with col2_v:
         # Use a separate slider or the same one as above
-        v_selected_date = st.slider("Violence Timeline Control", min_date, max_date, min_date, key="v_slider")
+        v_selected_date = st.slider("Slide to Change the Date", min_date, max_date, min_date, key="v_slider")
 
         # Filter by date
         v_filtered = violence_data[violence_data['date_utc'].dt.date <= v_selected_date]
@@ -319,6 +412,53 @@ try:
             #     print("PATH: ", video_match)
             #     if video_match:
             #         st.video(video_match[0])
+
+    # --- CASUALTY MAP SECTION ---
+    st.divider()
+    st.header("Casualties Mapped")
+    st.write("""
+    The number of killed protestors is currently unkown with reported casualties ranging from around 6000 to more than 30000 
+    [please see sources [here](https://en.wikipedia.org/wiki/2026_Iran_massacres#cite_note-4)]. Here we have used the information posted on
+    the Telegram channel [RememberTheirNames](https://t.me/RememberTheirNames) to map the casualties. This map will be updated over time. 
+        """)
+
+    # 1. Prepare your casualty dataframe (assuming it follows the same cleaning logic)
+    # casualty_data = load_and_clean_data("casualty_data.xlsx") 
+
+    col1_c, col2_c = st.columns([1, 2])
+    memo_data = load_memorial_data("memorial_final_data.xlsx")
+    # c_map_obj = get_cached_casualty_map(memo_data)
+
+    with col2_c:
+        c_map_obj = create_casualty_map(memo_data)
+        # get_cached_casualty_map(memo_data)
+
+        c_map_data = st_folium(
+            c_map_obj, 
+            width=800, 
+            height=600, 
+            key="casualty_map",
+            returned_objects=["last_object_clicked_tooltip"]
+        )
+
+    with col1_c:
+        st.subheader("Details")
+        # Since tooltip now only contains the ID (see Step 2), cleanup is easier
+        clicked_val = c_map_data.get("last_object_clicked_tooltip")
+
+        if clicked_val:
+            clicked_id = str(clicked_val).strip()
+            # Filter once using the index for speed
+            selected_rows = memo_data[memo_data['message_id'] == int(clicked_id)]
+
+            if not selected_rows.empty:
+                c_row = selected_rows.iloc[0]
+                st.write(f"### {c_row.get('Name', 'ID: ' + clicked_id)}")
+                st.write(f"**Location:** {c_row.get('City', 'Unknown')}")
+
+                image_path = f"static/images/{clicked_id}.jpg"
+                if os.path.exists(image_path):
+                    st.image(image_path, width=400)
 
 
 except Exception as e:
