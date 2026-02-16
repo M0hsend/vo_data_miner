@@ -272,7 +272,7 @@ Each video ID - visible by clicking on the points - can then be used to find the
 Finally, we have integrated a map of nationwide casualties using data compiled by the memorial Telegram channel, [RememberTheirNames](https://t.me/RememberTheirNames).
 
 
-If you would like to provide any feedback please contact us at [this](iran1404data@gmail.com) address.
+If you would like to provide any feedback please contact us at [this](mailto:iran1404data@gmail.com) address.
 """)
 
     st.subheader("Number of videos posted on VahidOnline leading to 9th Jan 2026")
