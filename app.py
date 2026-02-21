@@ -471,12 +471,13 @@ If you would like to provide any feedback please contact us at [this](mailto:ira
     [please see sources [here](https://en.wikipedia.org/wiki/2026_Iran_massacres#cite_note-4)]. Here we have used the information posted on
     the Telegram channel [RememberTheirNames](https://t.me/RememberTheirNames) to map the casualties. This map will be updated over time. 
         """)
+    st.write("Date updated: **21 Feb 2026**")
 
     # 1. Prepare your casualty dataframe (assuming it follows the same cleaning logic)
     # casualty_data = load_and_clean_data("casualty_data.xlsx") 
 
     col1_c, col2_c = st.columns([1, 2])
-    memo_data = load_memorial_data("memorial_final_data.xlsx")
+    memo_data = load_memorial_data("memorial_final_data_21Feb2026.xlsx")
     # c_map_obj = get_cached_casualty_map(memo_data)
 
     with col2_c:
